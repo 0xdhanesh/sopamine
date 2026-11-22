@@ -123,9 +123,21 @@ static void stateWriteUnlock()
 // Master initialiser for process-supression 
 static void initBlacklistState()
 {
+    // builtin function dispatch_once_t: opaque token that tracks if a block has run
+    // static facilitates the usage of same token multiple times
     static dispatch_once_t onceToken;
+
+    // dispatch_once executes the block EXACTLY_ONCE for the lifetime of process
     dispatch_once(&onceToken, ^{
-        stateLockInit();
-        cxx_global_vars_init();
+        stateLockInit();  // Initialise the pthread rwlock (must happen before any lock calls)
+        cxx_global_vars_init(); // Heap-allocate the blacklist set and state map
     });
+
+    /* FLOW:
+    initBlacklistState()         ← called once at startup
+        └─ stateLockInit()         ← rwlock ready
+        └─ cxx_global_vars_init()  ← blacklist set + state map on heap
+                ↓
+            [audit event loop starts, using stateReadLock/stateWriteLock to protect map/set access] 
+    */
 }
